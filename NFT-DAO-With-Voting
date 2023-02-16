@@ -1,0 +1,73 @@
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract MyNFT is ERC721, Ownable {
+    string private _baseURIextended;
+    mapping (uint => bool) private _lockedTokens;
+    uint private _totalTokens;
+
+    constructor(string memory name_, string memory symbol_, string memory baseURI_) ERC721(name_, symbol_) {
+        _baseURIextended = baseURI_;
+        _totalTokens = 0;
+    }
+
+    function _baseURI() internal view virtual override returns (string memory) {
+        return _baseURIextended;
+    }
+
+    function mint(address to, uint tokenId) public onlyOwner {
+        require(!_lockedTokens[tokenId], "Token is locked");
+        _totalTokens++;
+        _safeMint(to, tokenId);
+    }
+
+    function lockToken(uint tokenId) public onlyOwner {
+        _lockedTokens[tokenId] = true;
+    }
+
+    function unlockToken(uint tokenId) public onlyOwner {
+        _lockedTokens[tokenId] = false;
+    }
+
+    function totalTokens() public view returns (uint) {
+        return _totalTokens;
+    }
+}
+
+contract MyDAO is Ownable {
+    mapping (address => bool) private _members;
+    mapping (uint => uint) private _votes;
+    uint private _totalVotes;
+    uint private _proposalCount;
+
+    function addMember(address member) public onlyOwner {
+        _members[member] = true;
+    }
+
+    function removeMember(address member) public onlyOwner {
+        _members[member] = false;
+    }
+
+    function submitProposal(uint tokenId) public {
+        require(_members[msg.sender], "Not a member of the DAO");
+        require(MyNFT(address(this)).ownerOf(tokenId) == msg.sender, "Not the owner of the token");
+        _votes[_proposalCount] = 0;
+        _proposalCount++;
+    }
+
+    function vote(uint proposalId) public {
+        require(_members[msg.sender], "Not a member of the DAO");
+        _votes[proposalId]++;
+        _totalVotes++;
+    }
+
+    function executeProposal(uint proposalId) public onlyOwner {
+        require(_totalVotes > 0, "No votes yet");
+        require(_votes[proposalId] > _totalVotes / 2, "Not enough votes to pass");
+        require(!MyNFT(address(this)).lockedTokens(proposalId), "Token is locked");
+        MyNFT(address(this)).lockToken(proposalId);
+        // Execute proposal here
+    }
+}
